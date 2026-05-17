@@ -84,6 +84,8 @@ def main():
             result = landmarker.detect_for_video(mp_image, timestamp_ms)
 
 
+            if not result.pose_landmarks:
+                continue
             # matlib section - dyanmicly plot the 3D pose landmarks
             plot_world_landmarks(plt, ax,result.pose_world_landmarks[0])
 
@@ -99,3 +101,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
