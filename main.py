@@ -1,6 +1,5 @@
 from pathlib import Path
 import time
-
 import cv2
 import numpy as np
 
@@ -17,6 +16,7 @@ from mediapipe.tasks.python.vision.pose_landmarker import (
 from mediapipe.tasks.python.vision import drawing_utils as mp_drawing
 
 import matplotlib.pyplot as plt
+from utils.plot_pose_live import plot_world_landmarks
 
 
 MODEL_DIR = Path("models")
@@ -72,6 +72,10 @@ def main():
 
     prev_time = 0.0
 
+    plt.ion()
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection="3d")
+
     with PoseLandmarker.create_from_options(options) as landmarker:
         while cap.isOpened():
             success, frame = cap.read()
@@ -111,6 +115,11 @@ def main():
                 (255, 0, 0),
                 2,
             )
+
+            # matlib section - dyanmicly plot the 3D pose landmarks
+
+            plot_world_landmarks(plt, ax,result.pose_world_landmarks[0])
+
 
             cv2.imshow("MediaPipe Pose Landmarker", frame)
             if cv2.waitKey(5) & 0xFF == 27:
