@@ -2,12 +2,7 @@
 # Posted by Vaibhav Arduino
 # Retrieved 2026-05-16, License - CC BY-SA 4.0
 
-def plot_world_landmarks(
-    plt,
-    ax,
-    landmarks,
-    visibility_th=0.5,
-):
+def plot_world_landmarks(plt, ax, landmarks, visibility_th=0.5) -> None:
     if not landmarks:
         return
     
