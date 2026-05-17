@@ -35,6 +35,7 @@ def open_camera() -> cv2.VideoCapture | None:
         cap = cv2.VideoCapture(index, cv2.CAP_AVFOUNDATION)
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, CAPTURE_WIDTH)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAPTURE_HEIGHT)
+        
         if cap.isOpened():
             print(f"Using camera index {index} (AVFoundation)")
             return cap
