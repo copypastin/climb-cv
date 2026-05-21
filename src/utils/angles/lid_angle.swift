@@ -191,7 +191,7 @@ struct LidAngleCLITest {
         let lidAngleSensor = LidAngleSensor()
 
         if !lidAngleSensor.isAvailable {
-            print("[LAS] \(lidAngleSensor.diagnostic.statusMessage)")
+            print("Lid angle sensor not available on this hardware.")
             return
         }
 

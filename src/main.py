@@ -131,7 +131,7 @@ def main():
                 thread_lid = Process(target=read_swift_lid, args=(lid_angle_value, lid_timestamp))
                 thread_lid.start()
 
-            if cv2.waitKey(5) & 0xFF == 27:
+            if cv2.waitKey(1) & 0xFF == 27:
                 break
 
 

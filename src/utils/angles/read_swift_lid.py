@@ -4,15 +4,29 @@ from pathlib import Path
 import time
 
 def read_swift_lid(lid_angle_value, lid_timestamp) -> None:
-    # Define the Swift file paths relative to the repo root.
 
-    repo_root: Path = Path(__file__).resolve().parents[2]
-    path: Path = repo_root / "utils" / "angles"
+    OVERRIDE_COMPILED = False # For testing
+    
+    repo_root: Path = Path(__file__).resolve().parents[3]
+
+
+    build_dir: Path = repo_root / "build"
+    build_path: Path = build_dir / "LidAngle_Compiled"
+    path: Path = repo_root / "src" / "utils" / "angles"
     command: str = None
 
-    if (path / "LidAngle_Compiled").exists():
-        # print("Using precompiled LidAngle binary")
-        command = f"{path / 'LidAngle_Compiled'}"
+    if not build_path.exists() and not OVERRIDE_COMPILED:
+
+        if not build_dir.exists():
+            build_dir.mkdir(parents=True)
+
+        print("Compiling LidAngle from switft to binary")
+        command = f"swiftc {path / 'lid_angle.swift'} {path / 'hardware_compat.swift'} -o {build_path}"
+        subprocess.run(command, shell=True, check=True)
+
+
+    if not OVERRIDE_COMPILED:
+        command = f"{build_path}"
     else:
         lid_angle_path: Path = path / "lid_angle.swift"
         lid_hardware_path: Path = path / "hardware_compat.swift"
