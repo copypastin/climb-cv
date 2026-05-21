@@ -10,10 +10,10 @@ from mediapipe.tasks.python.vision.core.vision_task_running_mode import VisionTa
 from mediapipe.tasks.python.vision.pose_landmarker import PoseLandmarker, PoseLandmarkerOptions
 
 import matplotlib.pyplot as plt
-from utils.plot_pose_live import plot_world_landmarks
-from utils.exo_live import exo_live
-
-
+from utils.rendering.plot_pose_live import plot_world_landmarks
+from utils.rendering.exo_live import exo_live
+from utils.angles.read_swift_lid import read_swift_lid
+import utils.config as config
 
 
 
@@ -91,6 +91,10 @@ def main():
 
             # exo_live - draw pose landmarks and display the frame
             exo_live(cv2, frame, result)
+
+            # read the lid angle from the swift script and print it
+            read_swift_lid()
+            print(f"LID Angle: {config.lid_angle}")
 
             if cv2.waitKey(5) & 0xFF == 27:
                 break
