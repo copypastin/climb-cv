@@ -14,25 +14,22 @@ import matplotlib.pyplot as plt
 from utils.rendering.plot_pose_live import plot_world_landmarks
 from utils.rendering.exo_live import exo_live
 from utils.angles.read_swift_lid import read_swift_lid
-import utils.config as config
 
 
-
-MODEL_DIR = Path("./models")
-MODEL_PATH = MODEL_DIR / "pose_landmarker_heavy.task"
-MODELS_PATHS = {
+MODEL_DIR: Path = Path("./models")
+MODEL_PATH: Path = MODEL_DIR / "pose_landmarker_heavy.task"
+MODELS_PATHS: dict[str, Path] = {
     "heavy": MODEL_DIR / "pose_landmarker_heavy.task",
     "full": MODEL_DIR / "pose_landmarker_full.task",
     "regular": MODEL_DIR / "pose_landmarker.task"
 }
 
 # configurables
-CURRENT_MODEL = MODELS_PATHS["full"]
-CAPTURE_WIDTH: int = 320
-CAPTURE_HEIGHT: int = 240
+CURRENT_MODEL: Path = MODELS_PATHS["full"]
+CAPTURE_WIDTH, CAPTURE_HEIGHT = 320, 240
 
 def open_camera() -> cv2.VideoCapture | None:
-    for index in (0, 1, 2):
+    for index in np.arange(0, 4):
         cap = cv2.VideoCapture(index, cv2.CAP_AVFOUNDATION)
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, CAPTURE_WIDTH)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAPTURE_HEIGHT)
@@ -42,7 +39,7 @@ def open_camera() -> cv2.VideoCapture | None:
             return cap
         cap.release()
 
-    for index in (0, 1, 2):
+    for index in np.arange(0, 4):
         cap = cv2.VideoCapture(index)
         if cap.isOpened():
             print(f"Using camera index {index} (default backend)")
@@ -57,7 +54,7 @@ def main():
     # SETUP
 
     # Pose Landmarker options
-    options = PoseLandmarkerOptions(
+    options: PoseLandmarkerOptions = PoseLandmarkerOptions(
         base_options=BaseOptions(model_asset_path=str(CURRENT_MODEL)),
         running_mode=VisionTaskRunningMode.VIDEO,
         min_pose_detection_confidence=0.2,
@@ -78,11 +75,10 @@ def main():
         return
     
     # Multiprocessing manager for angle
-    thread_lid: Process | None = None
     manager = Manager()
-    lid_angle_value = manager.Value('d', 0.0)  # Shared value for LID angle
-    lid_timestamp = manager.Value('f', 0.0)    # Shared value for
-
+    thread_lid: Process | None = None
+    lid_angle_value = manager.Value('d', 0.0)
+    lid_timestamp = manager.Value('f', 0.0) 
 
 
     with PoseLandmarker.create_from_options(options) as landmarker:
@@ -97,13 +93,14 @@ def main():
 
             if not result.pose_landmarks:
                 continue
+
             # matlib section - dyanmicly plot the 3D pose landmarks
             plot_world_landmarks(plt, ax,result.pose_world_landmarks[0])
 
             # exo_live - draw pose landmarks and display the frame
             exo_live(cv2, frame, result, lid_angle_value, lid_timestamp)
 
-            # read the lid angle from the swift script and print it
+            # spawn a separate process to read the mac camera angle if the previous process is not alive
             if thread_lid is None or not thread_lid.is_alive():
                 thread_lid = Process(target=read_swift_lid, args=(lid_angle_value, lid_timestamp))
                 thread_lid.start()

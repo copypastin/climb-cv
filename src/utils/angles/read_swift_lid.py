@@ -3,15 +3,22 @@ import re
 from pathlib import Path
 import time
 
-def read_swift_lid(lid_angle_value, lid_timestamp):
+def read_swift_lid(lid_angle_value, lid_timestamp) -> None:
     # Define the Swift file paths relative to the repo root.
-    repo_root = Path(__file__).resolve().parents[2]
-    path = repo_root / "utils" / "angles"
-    lid_angle_path = path / "lid_angle.swift"
-    lid_hardware_path = path / "HardwareCompat.swift"
 
+    repo_root: Path = Path(__file__).resolve().parents[2]
+    path: Path = repo_root / "utils" / "angles"
+    command: str = None
 
-    command = f"swiftc {lid_angle_path} {lid_hardware_path} -o /tmp/lid_angle && /tmp/lid_angle"
+    if (path / "LidAngle_Compiled").exists():
+        # print("Using precompiled LidAngle binary")
+        command = f"{path / 'LidAngle_Compiled'}"
+    else:
+        lid_angle_path: Path = path / "lid_angle.swift"
+        lid_hardware_path: Path = path / "hardware_compat.swift"
+        command = f"swiftc {lid_angle_path} {lid_hardware_path} -o /tmp/lid_angle && /tmp/lid_angle"
+
+        
     try:
         result = subprocess.run(command, shell=True, capture_output=True, text=True, check=True)
         match = re.search(r"[-+]?\d*\.?\d+", result.stdout)
