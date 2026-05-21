@@ -2,6 +2,7 @@ from pathlib import Path
 import time
 import cv2
 import numpy as np
+from multiprocessing import Process, Manager
 
 from mediapipe.tasks.python.core.base_options import BaseOptions
 from mediapipe.tasks.python.vision.core.image import Image, ImageFormat
@@ -17,7 +18,7 @@ import utils.config as config
 
 
 
-MODEL_DIR = Path("models")
+MODEL_DIR = Path("./models")
 MODEL_PATH = MODEL_DIR / "pose_landmarker_heavy.task"
 MODELS_PATHS = {
     "heavy": MODEL_DIR / "pose_landmarker_heavy.task",
@@ -27,8 +28,8 @@ MODELS_PATHS = {
 
 # configurables
 CURRENT_MODEL = MODELS_PATHS["full"]
-CAPTURE_WIDTH: int = 640
-CAPTURE_HEIGHT: int = 480
+CAPTURE_WIDTH: int = 320
+CAPTURE_HEIGHT: int = 240
 
 def open_camera() -> cv2.VideoCapture | None:
     for index in (0, 1, 2):
@@ -52,7 +53,10 @@ def open_camera() -> cv2.VideoCapture | None:
 
 
 def main():
+    
+    # SETUP
 
+    # Pose Landmarker options
     options = PoseLandmarkerOptions(
         base_options=BaseOptions(model_asset_path=str(CURRENT_MODEL)),
         running_mode=VisionTaskRunningMode.VIDEO,
@@ -61,16 +65,23 @@ def main():
         min_tracking_confidence=0.2,
     )
 
+    # Configuration for matplotlib live plotting
     plt.ion()
     fig = plt.figure()
     ax = fig.add_subplot(111, projection="3d")
 
-
+    # Camera setup
     cap = open_camera()
 
     if cap is None:
         print("No camera could be opened.")
         return
+    
+    # Multiprocessing manager for angle
+    thread_lid: Process | None = None
+    manager = Manager()
+    lid_angle_value = manager.Value('d', 0.0)  # Shared value for LID angle
+    lid_timestamp = manager.Value('f', 0.0)    # Shared value for
 
 
 
@@ -90,17 +101,22 @@ def main():
             plot_world_landmarks(plt, ax,result.pose_world_landmarks[0])
 
             # exo_live - draw pose landmarks and display the frame
-            exo_live(cv2, frame, result)
+            exo_live(cv2, frame, result, lid_angle_value, lid_timestamp)
 
             # read the lid angle from the swift script and print it
-            read_swift_lid()
-            print(f"LID Angle: {config.lid_angle}")
+            if thread_lid is None or not thread_lid.is_alive():
+                thread_lid = Process(target=read_swift_lid, args=(lid_angle_value, lid_timestamp))
+                thread_lid.start()
 
             if cv2.waitKey(5) & 0xFF == 27:
                 break
 
     cap.release()
     cv2.destroyAllWindows()
+    if thread_lid is not None and thread_lid.is_alive():
+        thread_lid.terminate()
+        thread_lid.join(timeout=1)
+    manager.shutdown()
 
 
 if __name__ == "__main__":

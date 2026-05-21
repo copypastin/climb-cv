@@ -196,7 +196,8 @@ struct LidAngleCLITest {
         }
 
         lidAngleSensor.start()
-
+        RunLoop.current.run(until: Date().addingTimeInterval(0.15))
         print(lidAngleSensor.angle)
+        lidAngleSensor.stop()
     }
 }
