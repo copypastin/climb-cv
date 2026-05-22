@@ -52,7 +52,7 @@ def main():
     
     # SETUP
 
-    # Pose Landmarker options
+    # Pose Landmarker options   
     delegate = BaseOptions.Delegate.GPU
     print("MediaPipe delegate: GPU")
 
@@ -62,9 +62,9 @@ def main():
             delegate=delegate,
         ),
         running_mode=VisionTaskRunningMode.VIDEO,
-        min_pose_detection_confidence=0.2,
-        min_pose_presence_confidence=0.2,
-        min_tracking_confidence=0.2,
+        min_pose_detection_confidence=0.5,
+        min_pose_presence_confidence=0.5,
+        min_tracking_confidence=0.5,
     )
 
 
@@ -146,7 +146,6 @@ def main():
             try:
                 plot_queue.put_nowait(None)
             except Exception:
-                # fall back to direct termination
                 plot_proc.terminate()
             plot_proc.join(timeout=1)
     except Exception:
