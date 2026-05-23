@@ -1,9 +1,10 @@
 from pathlib import Path
+from typing import Callable
 import time
 import cv2
 import numpy as np
 from multiprocessing import Process, Manager
-from threading import Thread
+from threading import Thread, current_thread
 
 from mediapipe.tasks.python.core.base_options import BaseOptions
 from mediapipe.tasks.python.vision.core.image import Image, ImageFormat
@@ -130,15 +131,24 @@ class climbcv:
     
 
 
-    def start(self, blocking: bool = True) -> None:
+    def start(
+        self,
+        blocking: bool = True,
+        on_landmarks: Callable[[list], None] | None = None,
+    ) -> None:
         if not blocking:
             if self._run_thread is not None and self._run_thread.is_alive():
                 return
-            self._run_thread = Thread(target=self.start, kwargs={"blocking": True}, daemon=True)
+            self._run_thread = Thread(
+                target=self.start,
+                kwargs={"blocking": True, "on_landmarks": on_landmarks},
+                daemon=True,
+            )
             self._run_thread.start()
             return
         if self._run_thread is not None and self._run_thread.is_alive():
-            raise RuntimeError("climbcv is already running")
+            if current_thread() is not self._run_thread:
+                raise RuntimeError("climbcv is already running")
 
         self.cap = self.__open_camera()
 
@@ -175,21 +185,31 @@ class climbcv:
 
                 has_pose = bool(result.pose_landmarks)
 
-                # for plotting: extract raw landmark data and send to the plotting process via queue
-                if self.enable_plotting and self.plot_queue is not None and has_pose and result.pose_world_landmarks:
+                # extract raw landmark data for external access and optional plotting
+                if has_pose and result.pose_world_landmarks:
                     try:
                         landmarks_obj = result.pose_world_landmarks[0]
                         landmarks_iter = landmarks_obj.landmark if hasattr(landmarks_obj, "landmark") else landmarks_obj
-                        self.raw_landmarks = [(getattr(l, 'visibility', 1.0), float(l.x), float(l.y), float(l.z)) for l in landmarks_iter]
-                        try:
-                            if self.plot_queue.full():
-                                _ = self.plot_queue.get_nowait()
-                        except Exception:
-                            pass
-                        try:
-                            self.plot_queue.put_nowait(self.raw_landmarks)
-                        except Exception:
-                            pass
+                        self.raw_landmarks = [
+                            (getattr(l, "visibility", 1.0), float(l.x), float(l.y), float(l.z))
+                            for l in landmarks_iter
+                        ]
+                        if on_landmarks is not None:
+                            try:
+                                on_landmarks(self.raw_landmarks)
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+
+                if self.enable_plotting and self.plot_queue is not None and self.raw_landmarks is not None:
+                    try:
+                        if self.plot_queue.full():
+                            _ = self.plot_queue.get_nowait()
+                    except Exception:
+                        pass
+                    try:
+                        self.plot_queue.put_nowait(self.raw_landmarks)
                     except Exception:
                         pass
 
