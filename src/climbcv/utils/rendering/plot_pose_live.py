@@ -91,12 +91,12 @@ def plot_world_landmarks_points(ax, raw_landmarks, visibility_th=0.5) -> None:
     ax.set_zlim3d(-1, 1)
 
     ax.scatter(face_x, face_y, face_z)
-    ax.plot(right_arm_x, right_arm_y, right_arm_z)
-    ax.plot(left_arm_x, left_arm_y, left_arm_z)
-    ax.plot(right_body_side_x, right_body_side_y, right_body_side_z)
-    ax.plot(left_body_side_x, left_body_side_y, left_body_side_z)
-    ax.plot(shoulder_x, shoulder_y, shoulder_z)
-    ax.plot(waist_x, waist_y, waist_z)
+    ax.plot(right_arm_x, right_arm_y, right_arm_z, alpha=0.5)
+    ax.plot(left_arm_x, left_arm_y, left_arm_z, alpha=0.5)
+    ax.plot(right_body_side_x, right_body_side_y, right_body_side_z, alpha=0.5)
+    ax.plot(left_body_side_x, left_body_side_y, left_body_side_z, alpha=0.5)
+    ax.plot(shoulder_x, shoulder_y, shoulder_z, alpha=0.5)
+    ax.plot(waist_x, waist_y, waist_z, alpha=0.5)
     return
 
 
