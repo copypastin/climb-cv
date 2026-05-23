@@ -48,6 +48,8 @@ class climbcv:
         self.plot_queue = None
         self.lid_angle_value = None
         self.lid_timestamp = None
+        self.raw_landmarks = None
+        self._run_thread: Thread | None = None
 
         self.options: PoseLandmarkerOptions = PoseLandmarkerOptions(
             base_options=BaseOptions(
@@ -61,7 +63,7 @@ class climbcv:
         )
 
 
-    def __del__(self):
+    def _cleanup(self) -> None:
         cap = getattr(self, "cap", None)
         if cap is not None:
             cap.release()
@@ -100,6 +102,10 @@ class climbcv:
             manager.shutdown()
 
 
+    def __del__(self):
+        self._cleanup()
+
+
 
     def __open_camera(self) -> cv2.VideoCapture | None:
         for index in np.arange(0, 4):
@@ -124,7 +130,16 @@ class climbcv:
     
 
 
-    def start(self):
+    def start(self, blocking: bool = True) -> None:
+        if not blocking:
+            if self._run_thread is not None and self._run_thread.is_alive():
+                return
+            self._run_thread = Thread(target=self.start, kwargs={"blocking": True}, daemon=True)
+            self._run_thread.start()
+            return
+        if self._run_thread is not None and self._run_thread.is_alive():
+            raise RuntimeError("climbcv is already running")
+
         self.cap = self.__open_camera()
 
         if self.cap is None:
@@ -146,6 +161,8 @@ class climbcv:
 
         with PoseLandmarker.create_from_options(self.options) as landmarker:
             while self.cap.isOpened():
+                if self.stop_event is not None and self.stop_event.is_set():
+                    break
 
                 success, frame = self.cap.read()
                 if not success:
@@ -163,14 +180,14 @@ class climbcv:
                     try:
                         landmarks_obj = result.pose_world_landmarks[0]
                         landmarks_iter = landmarks_obj.landmark if hasattr(landmarks_obj, "landmark") else landmarks_obj
-                        raw = [(getattr(l, 'visibility', 1.0), float(l.x), float(l.y), float(l.z)) for l in landmarks_iter]
+                        self.raw_landmarks = [(getattr(l, 'visibility', 1.0), float(l.x), float(l.y), float(l.z)) for l in landmarks_iter]
                         try:
                             if self.plot_queue.full():
                                 _ = self.plot_queue.get_nowait()
                         except Exception:
                             pass
                         try:
-                            self.plot_queue.put_nowait(raw)
+                            self.plot_queue.put_nowait(self.raw_landmarks)
                         except Exception:
                             pass
                     except Exception:
@@ -192,4 +209,17 @@ class climbcv:
 
                 if cv2.waitKey(1) & 0xFF == 27:
                     break
+
+        self._cleanup()
+
+
+    def stop(self, timeout: float = 2.0) -> None:
+        if self.stop_event is not None:
+            self.stop_event.set()
+
+        if self._run_thread is not None and self._run_thread.is_alive():
+            self._run_thread.join(timeout=timeout)
+
+        if self._run_thread is None or not self._run_thread.is_alive():
+            self._cleanup()
 
