@@ -61,6 +61,7 @@ class climbcv:
             min_pose_detection_confidence=0.5,
             min_pose_presence_confidence=0.5,
             min_tracking_confidence=0.5,
+            smooth_landmarks = True,
         )
 
 
