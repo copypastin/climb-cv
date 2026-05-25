@@ -7,7 +7,7 @@
 
 <img width="800" height="400" alt="climb-cv" src="https://github.com/user-attachments/assets/04cd2a2f-e3f6-4c31-93ad-d4612b1f5239" />
 
-<img width="800" height="400" alt="image" src="https://github.com/user-attachments/assets/4a396f50-27f7-4f1a-a426-f8d148a3d4c0" />
+<img width="800" height="400" alt="climb-cv" src="https://github.com/user-attachments/assets/7776c1b2-dd67-40ea-a8c9-46e749f7ab9e" />
 
 
 
