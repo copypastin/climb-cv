@@ -31,7 +31,12 @@ class climbcv:
     CAPTURE_WIDTH, CAPTURE_HEIGHT = 320, 240
 
 
-    def __init__(self, model: str = "heavy", capture_width: int = 320, capture_height: int = 240, delegate: BaseOptions.Delegate = BaseOptions.Delegate.GPU, enable_exo_live: bool = True, enable_plotting: bool = False, enable_mac_lid: bool = True, mac_lid_backend: str = "process"):
+    def __init__(self, model: str = "heavy", capture_width: int = 320, capture_height: int = 240, 
+                delegate: BaseOptions.Delegate = BaseOptions.Delegate.GPU, 
+                 enable_exo_live: bool = True, enable_plotting: bool = False, 
+                 enable_mac_lid: bool = True, mac_lid_backend: str = "process"):
+        
+        
         self.model = model
         self.capture_width = capture_width
         self.capture_height = capture_height
@@ -196,9 +201,19 @@ class climbcv:
                             (getattr(l, "visibility", 1.0), float(l.x), float(l.y), float(l.z))
                             for l in landmarks_iter
                         ]
+
+                        self.last_three_landmarks = getattr(self, "last_three_landmarks", [])
+                        self.last_three_landmarks.append(self.raw_landmarks)
+                        if len(self.last_three_landmarks) > 3:
+                            self.last_three_landmarks.pop(0)
+                            self.average_landmarks = np.mean(self.last_three_landmarks)
+                        else:
+                            continue
+                        
+                        
                         if on_landmarks is not None:
                             try:
-                                on_landmarks(self.raw_landmarks)
+                                on_landmarks(self.average_landmarks)
                             except Exception:
                                 pass
                     except Exception:

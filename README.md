@@ -5,7 +5,7 @@
 
 
 
-<img width="800" height="400" alt="climb-cv" src="assets/climb-header.gif" />
+<img width="800" height="400" alt="climb-cv" src="assets/header.gif" />
 
 
 
