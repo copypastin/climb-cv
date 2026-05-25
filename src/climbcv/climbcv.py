@@ -61,8 +61,9 @@ class climbcv:
             min_pose_detection_confidence=0.5,
             min_pose_presence_confidence=0.5,
             min_tracking_confidence=0.5,
-            smooth_landmarks = True,
         )
+
+        print(f"Initialized climbcv with model: {self.model}, capture size: ({self.capture_width}x{self.capture_height}), delegate: {self.delegate}, enable_exo_live: {self.enable_exo_live}, enable_plotting: {self.enable_plotting}, enable_mac_lid: {self.enable_mac_lid}, mac_lid_backend: {self.mac_lid_backend}")
 
 
     def _cleanup(self) -> None:
@@ -155,8 +156,7 @@ class climbcv:
 
         if self.cap is None:
             raise RuntimeError("No camera could be opened.")
-
-
+        
         # Multiprocessing manager for angle and plotting queue
         self.manager = Manager()
         self.stop_event = self.manager.Event()
@@ -179,6 +179,7 @@ class climbcv:
                 if not success:
                     continue
 
+                frame = cv2.flip(frame, 1)
                 rgba_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGBA)
                 mp_image = Image(ImageFormat.SRGBA, np.asarray(rgba_frame))
                 timestamp_ms = int(time.monotonic() * 1000)

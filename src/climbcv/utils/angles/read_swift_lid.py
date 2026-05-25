@@ -5,7 +5,7 @@ import time
 
 def read_swift_lid(lid_angle_value, lid_timestamp, stop_event=None, poll_interval: float = 0.5) -> None:
 
-    OVERRIDE_COMPILED = False # For testing
+    OVERRIDE_COMPILED = True # For testing
     
     repo_root: Path = Path(__file__).resolve().parents[4]
 

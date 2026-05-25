@@ -5,7 +5,7 @@
 
 
 
-<img width="800" height="400" alt="climb-cv" src="https://github.com/user-attachments/assets/04cd2a2f-e3f6-4c31-93ad-d4612b1f5239" />
+<img width="800" height="400" alt="climb-cv" src="assets/climb-header.gif" />
 
 
 
@@ -16,7 +16,7 @@ the main concept of this project is to leverage computer vision and machine lear
 - by analyzing visual data, we can gain insights into climbing techniques, developing consistent route difficulty, and even predict climbing routes based on visual cues.
 - this would also be a cool project for our github/linkedin profiles
 
-<img width="800" height="354" alt="climb2" src="https://github.com/user-attachments/assets/deb78ac1-60d4-4f7b-8eeb-441f90568aea" />
+<img width="800" height="354" alt="climb2" src="assets/climb1.gif" />
 
 
 ## requirements

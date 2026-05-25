@@ -12,13 +12,13 @@ without needing to worry about the camera and mediapipe setup
 
 
 def main():
-    ccv = climbcv()
+    ccv = climbcv(enable_plotting=True)
     ccv.start(on_landmarks=on_landmarks)
 
 def on_landmarks(landmarks):
     global latest_landmarks
     latest_landmarks = landmarks
-    print("Received landmarks:", landmarks)
+    # print("Received landmarks:", landmarks)
 
 
 if __name__ == "__main__":
