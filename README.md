@@ -7,6 +7,9 @@
 
 <img width="800" height="400" alt="climb-cv" src="https://github.com/user-attachments/assets/04cd2a2f-e3f6-4c31-93ad-d4612b1f5239" />
 
+<img width="800" height="400" alt="image" src="https://github.com/user-attachments/assets/4a396f50-27f7-4f1a-a426-f8d148a3d4c0" />
+
+
 
 ## concept
 the main concept of this project is to leverage computer vision and machine learning techniques to tap into the vast potential of visual data in climbing.
