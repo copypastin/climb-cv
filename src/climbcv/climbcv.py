@@ -41,7 +41,6 @@ class climbcv:
         enable_exo_live: bool = True,
         enable_plotting: bool = False,
         enable_mac_lid: bool = True,
-        mac_lid_backend: str = "process",
         smoothing_enabled: bool = True,
         smoothing_min_cutoff: float = 1.0,
         smoothing_beta: float = 0.4,
@@ -57,7 +56,6 @@ class climbcv:
         self.enable_exo_live = enable_exo_live
         self.enable_plotting = enable_plotting
         self.enable_mac_lid = enable_mac_lid
-        self.mac_lid_backend = mac_lid_backend
         self.smoothing_enabled = smoothing_enabled
         self.smoothing_visibility_threshold = smoothing_visibility_threshold
 
@@ -89,7 +87,15 @@ class climbcv:
             min_tracking_confidence=0.5,
         )
 
-        print(f"Initialized climbcv with model: {self.model}, capture size: ({self.capture_width}x{self.capture_height}), delegate: {self.delegate}, enable_exo_live: {self.enable_exo_live}, enable_plotting: {self.enable_plotting}, enable_mac_lid: {self.enable_mac_lid}, mac_lid_backend: {self.mac_lid_backend}")
+        print(
+            "Initialized climbcv with the configs: "
+            f"\n\tmodel={self.model} "
+            f"\n\tcapture=({self.capture_width}x{self.capture_height})"
+            f"\n\tdelegate={self.delegate}"
+            f"\n\texo_live={self.enable_exo_live}"
+            f"\n\tplotting={self.enable_plotting}"
+            f"\n\tmac_lid={self.enable_mac_lid}"
+        )
 
 
     def _cleanup(self) -> None:
@@ -262,9 +268,6 @@ class climbcv:
                     if self.plot_queue is None: 
                         continue
 
-                    print("smoothed_landmarks:", self.smoothed_landmarks)
-                    print("raw_landmarks:", self.raw_landmarks)
-
                     if self.smoothed_landmarks is not None:
                         try:
                             if self.plot_queue.full():
@@ -295,10 +298,7 @@ class climbcv:
 
                 # spawn a separate worker to read the mac camera angle if the previous worker is not alive
                 if self.enable_mac_lid and (self.thread_lid is None or not self.thread_lid.is_alive()):
-                    if self.mac_lid_backend == "thread":
-                        self.thread_lid = Thread(target=read_swift_lid, args=(self.lid_angle_value, self.lid_timestamp, self.stop_event), daemon=True)
-                    else:
-                        self.thread_lid = Process(target=read_swift_lid, args=(self.lid_angle_value, self.lid_timestamp, self.stop_event))
+                    self.thread_lid = Process(target=read_swift_lid, args=(self.lid_angle_value, self.lid_timestamp, self.stop_event))
                     self.thread_lid.start()
 
                 if cv2.waitKey(1) & 0xFF == 27:
