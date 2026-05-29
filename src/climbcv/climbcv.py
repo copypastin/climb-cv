@@ -15,6 +15,7 @@ from mediapipe.tasks.python.vision.pose_landmarker import PoseLandmarker, PoseLa
 from .utils.rendering.plot_pose_live import plotting_process
 from .utils.rendering.exo_live import exo_live
 from .utils.angles.read_swift_lid import read_swift_lid
+from .utils.smoothing import OneEuroFilter
 
 class climbcv:
         
@@ -31,10 +32,22 @@ class climbcv:
     CAPTURE_WIDTH, CAPTURE_HEIGHT = 320, 240
 
 
-    def __init__(self, model: str = "heavy", capture_width: int = 320, capture_height: int = 240, 
-                delegate: BaseOptions.Delegate = BaseOptions.Delegate.GPU, 
-                 enable_exo_live: bool = True, enable_plotting: bool = False, 
-                 enable_mac_lid: bool = True, mac_lid_backend: str = "process"):
+    def __init__(
+        self,
+        model: str = "heavy",
+        capture_width: int = 320,
+        capture_height: int = 240,
+        delegate: BaseOptions.Delegate = BaseOptions.Delegate.GPU,
+        enable_exo_live: bool = True,
+        enable_plotting: bool = False,
+        enable_mac_lid: bool = True,
+        mac_lid_backend: str = "process",
+        smoothing_enabled: bool = True,
+        smoothing_min_cutoff: float = 1.0,
+        smoothing_beta: float = 0.4,
+        smoothing_d_cutoff: float = 1.0,
+        smoothing_visibility_threshold: float = 0.2,
+    ):
         
         
         self.model = model
@@ -45,6 +58,8 @@ class climbcv:
         self.enable_plotting = enable_plotting
         self.enable_mac_lid = enable_mac_lid
         self.mac_lid_backend = mac_lid_backend
+        self.smoothing_enabled = smoothing_enabled
+        self.smoothing_visibility_threshold = smoothing_visibility_threshold
 
         self.cap: cv2.VideoCapture | None = None
         self.manager = None
@@ -55,7 +70,13 @@ class climbcv:
         self.lid_angle_value = None
         self.lid_timestamp = None
         self.raw_landmarks = None
+        self.smoothed_landmarks = None
         self._run_thread: Thread | None = None
+        self._landmark_filter = OneEuroFilter(
+            min_cutoff=smoothing_min_cutoff,
+            beta=smoothing_beta,
+            d_cutoff=smoothing_d_cutoff,
+        )
 
         self.options: PoseLandmarkerOptions = PoseLandmarkerOptions(
             base_options=BaseOptions(
@@ -141,7 +162,7 @@ class climbcv:
     def start(
         self,
         blocking: bool = True,
-        on_landmarks: Callable[[list], None] | None = None,
+        on_landmarks: Callable[[np.ndarray], None] | None = None,
     ) -> None:
         if not blocking:
             if self._run_thread is not None and self._run_thread.is_alive():
@@ -202,33 +223,69 @@ class climbcv:
                             for l in landmarks_iter
                         ]
 
-                        self.last_three_landmarks = getattr(self, "last_three_landmarks", [])
-                        self.last_three_landmarks.append(self.raw_landmarks)
-                        if len(self.last_three_landmarks) > 3:
-                            self.last_three_landmarks.pop(0)
-                            self.average_landmarks = np.mean(self.last_three_landmarks)
+                        raw_array = np.asarray(self.raw_landmarks, dtype=np.float32)
+                        if self.smoothing_enabled:
+                            if (
+                                self.smoothed_landmarks is not None
+                                and raw_array.shape != self.smoothed_landmarks.shape
+                            ):
+                                self._landmark_filter.reset()
+                                self.smoothed_landmarks = None
+
+                            if (
+                                self.smoothing_visibility_threshold > 0.0
+                                and self.smoothed_landmarks is not None
+                            ):
+                                # Hold low-visibility points to reduce jitter.
+                                low_vis = raw_array[:, 0] < self.smoothing_visibility_threshold
+                                if np.any(low_vis):
+                                    raw_array[low_vis, 1:] = self.smoothed_landmarks[low_vis, 1:]
+
+                            self.smoothed_landmarks = self._landmark_filter.apply(
+                                raw_array, timestamp_ms / 1000.0
+                            )
                         else:
-                            continue
-                        
-                        
+                            self.smoothed_landmarks = raw_array
+
+                        self.average_landmarks = self.smoothed_landmarks
+
                         if on_landmarks is not None:
                             try:
-                                on_landmarks(self.average_landmarks)
+                                on_landmarks(self.smoothed_landmarks)
                             except Exception:
                                 pass
                     except Exception:
                         pass
 
-                if self.enable_plotting and self.plot_queue is not None and self.raw_landmarks is not None:
-                    try:
-                        if self.plot_queue.full():
-                            _ = self.plot_queue.get_nowait()
-                    except Exception:
-                        pass
-                    try:
-                        self.plot_queue.put_nowait(self.raw_landmarks)
-                    except Exception:
-                        pass
+                if self.enable_plotting:
+
+                    if self.plot_queue is None: 
+                        continue
+
+                    print("smoothed_landmarks:", self.smoothed_landmarks)
+                    print("raw_landmarks:", self.raw_landmarks)
+
+                    if self.smoothed_landmarks is not None:
+                        try:
+                            if self.plot_queue.full():
+                                _ = self.plot_queue.get_nowait()
+                        except Exception:
+                            pass
+                        try:
+                            self.plot_queue.put_nowait(self.smoothed_landmarks)
+                        except Exception:
+                            pass
+                        
+                    elif self.raw_landmarks is not None:
+                        try:
+                            if self.plot_queue.full():
+                                _ = self.plot_queue.get_nowait()
+                        except Exception:
+                            pass
+                        try:
+                            self.plot_queue.put_nowait(self.raw_landmarks)
+                        except Exception:
+                            pass
 
 
                 # exo_live - draw pose landmarks and display the frame

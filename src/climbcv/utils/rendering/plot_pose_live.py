@@ -1,25 +1,48 @@
+import numpy as np
+
 # Source - https://stackoverflow.com/a/72507262
 # Posted by Vaibhav Arduino
 # Retrieved 2026-05-16, License - CC BY-SA 4.0
 # Edited by Aaron Nguyen, 2026-06-01, License - CC BY-SA 4.0
 
 def plot_world_landmarks_points(ax, raw_landmarks, visibility_th=0.5) -> None:
-    """Plot from a plain list of raw landmarks.
+    """Plot from a list of landmarks or a numpy array.
 
-    `raw_landmarks` should be an iterable of either:
-    - tuples (visibility, x, y, z)
-    - tuples (x, y, z)
+    `raw_landmarks` should be one of:
+    - list/iterable of tuples (visibility, x, y, z)
+    - list/iterable of tuples (x, y, z)
+    - numpy array with shape (N, 4) or (N, 3)
     """
-    if not raw_landmarks:
+    if raw_landmarks is None:
         return
+    
 
-    landmark_point = []
-    for item in raw_landmarks:
-        if len(item) == 4:
-            vis, x, y, z = item
+    if isinstance(raw_landmarks, np.ndarray):
+        if raw_landmarks.size == 0 or raw_landmarks.ndim != 2:
+            return
+        if raw_landmarks.shape[1] >= 4:
+            vis = raw_landmarks[:, 0]
+            coords = raw_landmarks[:, 1:4]
+        elif raw_landmarks.shape[1] >= 3:
+            vis = np.ones(raw_landmarks.shape[0], dtype=raw_landmarks.dtype)
+            coords = raw_landmarks[:, 0:3]
         else:
-            vis, x, y, z = 1.0, item[0], item[1], item[2]
-        landmark_point.append([vis, (x, y, z)])
+            return
+        landmark_point = [
+            [vis[i], (coords[i, 0], coords[i, 1], coords[i, 2])]
+            for i in range(coords.shape[0])
+        ]
+    else:
+        if not raw_landmarks:
+            return
+        landmark_point = []
+        for item in raw_landmarks:
+            if len(item) == 4:
+                vis, x, y, z = item
+            else:
+                vis, x, y, z = 1.0, item[0], item[1], item[2]
+            landmark_point.append([vis, (x, y, z)])
+    
 
     face_index_list = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     right_arm_index_list = [11, 13, 15, 17, 19, 21]
@@ -100,11 +123,12 @@ def plot_world_landmarks_points(ax, raw_landmarks, visibility_th=0.5) -> None:
     return
 
 
+
 def plotting_process(queue, visibility_th=0.5):
-    """Process entrypoint: create its own Matplotlib figure and plot raw landmark lists.
+    """Process entrypoint: create its own Matplotlib figure and plot landmark data.
 
     Expects `queue` to be a multiprocessing.Queue or Manager.Queue. Send `None` to terminate.
-    Each item should be a list of tuples: (visibility, x, y, z) or (x, y, z).
+    Each item should be a list of tuples or a numpy array of shape (N, 4) or (N, 3).
     """
     import matplotlib.pyplot as plt
     plt.ion()

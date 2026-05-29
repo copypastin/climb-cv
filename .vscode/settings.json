@@ -1,3 +1,4 @@
 {
-    "isort.importStrategy": "fromEnvironment"
+    "isort.importStrategy": "fromEnvironment",
+    "python-envs.defaultEnvManager": "ms-python.python:system"
 }
