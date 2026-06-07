@@ -19,6 +19,8 @@ from .utils.smoothing import OneEuroFilter
 
 import matplotlib.pyplot as plt
 
+saved_frames = []
+
 class climbcv:
         
     MODEL_DIR: Path = Path("./models")
@@ -143,6 +145,15 @@ class climbcv:
         manager = getattr(self, "manager", None)
         if manager is not None:
             manager.shutdown()
+
+        data_path = Path(__file__).resolve().parents[2] / "data"
+        data_path.mkdir(parents=True, exist_ok=True)
+        filename = data_path / f"landmarks_{int(time.time())}.npy"
+
+        if len(saved_frames) > 0:
+            np.save(filename, np.stack(saved_frames, axis=0))
+            print(f"Saved {len(saved_frames)} frames to {filename}")
+
 
 
     def __del__(self):
@@ -277,6 +288,7 @@ class climbcv:
                         continue
 
                     if self.smoothed_landmarks is not None:
+                        saved_frames.append(self.smoothed_landmarks)
                         try:
                             if self.plot_queue.full():
                                 _ = self.plot_queue.get_nowait()
