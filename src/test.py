@@ -27,24 +27,20 @@ def main():
     global filename
     data_path.mkdir(parents=True, exist_ok=True)
     filename = data_path / f"landmarks_{int(time.time())}.npy"
+    replayfile = data_path / "landmarks_1780087142.npy"
     print(f"Writing landmarks to: {filename}")
 
     ccv = climbcv(enable_plotting=True)
-    ccv.start(on_landmarks=on_landmarks)
-    save_landmarks_to_file(frames)
 
+    ccv.replay(replayfile)
+    # ccv.start(on_landmarks=on_landmarks)
+    # np.save(filename, np.stack(frames, axis=0))
 
 def on_landmarks(landmarks):
     global latest_landmarks
     latest_landmarks = landmarks
     frames.append(np.asarray(landmarks, dtype=np.float32))
 
-def save_landmarks_to_file(landmarks_batch):
-    if not landmarks_batch:
-        print("No landmarks to save")
-        return
-
-    np.save(filename, np.stack(landmarks_batch, axis=0))
 
 if __name__ == "__main__":
     main()

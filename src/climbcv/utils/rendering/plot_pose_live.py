@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 
 # Source - https://stackoverflow.com/a/72507262
 # Posted by Vaibhav Arduino
@@ -130,7 +131,6 @@ def plotting_process(queue, visibility_th=0.5):
     Expects `queue` to be a multiprocessing.Queue or Manager.Queue. Send `None` to terminate.
     Each item should be a list of tuples or a numpy array of shape (N, 4) or (N, 3).
     """
-    import matplotlib.pyplot as plt
     plt.ion()
     fig = plt.figure()
     ax = fig.add_subplot(111, projection="3d")

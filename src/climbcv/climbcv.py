@@ -12,10 +12,12 @@ from mediapipe.tasks.python.vision.core.vision_task_running_mode import VisionTa
 
 from mediapipe.tasks.python.vision.pose_landmarker import PoseLandmarker, PoseLandmarkerOptions
 
-from .utils.rendering.plot_pose_live import plotting_process
+from .utils.rendering.plot_pose_live import plotting_process, plot_world_landmarks_points
 from .utils.rendering.exo_live import exo_live
 from .utils.angles.read_swift_lid import read_swift_lid
 from .utils.smoothing import OneEuroFilter
+
+import matplotlib.pyplot as plt
 
 class climbcv:
         
@@ -29,11 +31,14 @@ class climbcv:
 
     # configurables
     CURRENT_MODEL: Path = MODELS_PATHS["heavy"]
+
     CAPTURE_WIDTH, CAPTURE_HEIGHT = 320, 240
+    ENUM_MODELS = {"heavy", "full", "regular"}        
 
 
     def __init__(
         self,
+        mode: str = "live",
         model: str = "heavy",
         capture_width: int = 320,
         capture_height: int = 240,
@@ -47,8 +52,11 @@ class climbcv:
         smoothing_d_cutoff: float = 1.0,
         smoothing_visibility_threshold: float = 0.2,
     ):
+
+        if model not in self.ENUM_MODELS:
+            raise ValueError(f"Invalid model '{model}'. Valid options are: {self.ENUM_MODELS}")
         
-        
+
         self.model = model
         self.capture_width = capture_width
         self.capture_height = capture_height
@@ -317,3 +325,27 @@ class climbcv:
         if self._run_thread is None or not self._run_thread.is_alive():
             self._cleanup()
 
+    def replay(self, filename: str) -> None:
+
+        print(f"Replaying landmarks from file: {filename}")
+
+        plt.ion()
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection="3d")
+
+        try:
+            data = np.load(filename)
+            print("File loaded successfully.\n Total Frames:", len(data))
+
+        except Exception as e:
+            print(f"Error loading landmarks from file: {filename}")
+            print(e)
+            return
+
+        plot_world_landmarks_points(ax,data)
+
+        for frame in data:
+            frame = np.asarray(frame, dtype=np.float32)
+            plot_world_landmarks_points(ax, frame)
+            fig.canvas.draw_idle()
+            plt.pause(0.01)
