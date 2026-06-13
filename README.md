@@ -7,7 +7,7 @@
 
 <img width="800" height="400" alt="climb-cv" src="assets/header.gif" />
 
-
+read the [journal](./JOURNAL.md) for ongoing updates and development!
 
 ## concept
 the main concept of this project is to create a package of computer vision tools for climbing.
