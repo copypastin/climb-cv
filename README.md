@@ -15,6 +15,20 @@ the main concept of this project is to create a package of computer vision tools
 - this project aims to explore the potential of computer vision in climbing and provide a platform for climbers to leverage visual data to enhance the climbing technology. 
 - by analyzing visual data, we can gain insights into climbing techniques, developing consistent routesetting, and even predict climbing routes based on visual cues.
 
+## implementations / tech
+
+stack is compartmentalized into 3 distinct modules:
+1. **Video streaming and processing**
+>  **OpenCV** for image processing and analysis
+1. **Pose estimation and analysis**
+>  [Media Pose](https://github.com/google/mediapipe) for pose estimation
+> Data points are extracted and filtered to remove noise and improve accuracy
+> Results are rendered in 3d space using **matplotlib**    
+2. **Climb hold prediction and visualization**
+>  Implements [YOLO model](https://docs.ultralytics.com/models/yolo26#overview) for object detection
+> 
+
+
 <img width="800" height="354" alt="climb2" src="assets/climb1.gif" />
 
 
@@ -23,8 +37,6 @@ the main concept of this project is to create a package of computer vision tools
 - macbook M2 or newer (required for lid angle sensor)
     - swift compiler
 
-## main tech & references
-- OpenCV
-- [MediaPipe Pose](https://developers.google.com/mediapipe/solutions/vision/pose_landmarker)
+## additional tech & references
 - [Crux Lab Reconstruct](https://github.com/cruxbetalabs/reconstruct)
 - [LidAngleSensor](https://github.com/samhenrigold/LidAngleSensor)
