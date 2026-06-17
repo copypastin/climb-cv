@@ -3,21 +3,23 @@ from typing import Callable
 import time
 import cv2
 import numpy as np
-from multiprocessing import Process, Manager
+from multiprocessing import Process, Manager, Queue
+from queue import Empty, Full
 from threading import Thread, current_thread
 
 from mediapipe.tasks.python.core.base_options import BaseOptions
 from mediapipe.tasks.python.vision.core.image import Image, ImageFormat
 from mediapipe.tasks.python.vision.core.vision_task_running_mode import VisionTaskRunningMode
-
 from mediapipe.tasks.python.vision.pose_landmarker import PoseLandmarker, PoseLandmarkerOptions
 
+import matplotlib.pyplot as plt
+
+from .utils.yolo import yolo_boxes_worker
 from .utils.rendering.plot_pose_live import plotting_process, plot_world_landmarks_points
 from .utils.rendering.exo_live import exo_live
 from .utils.angles.read_swift_lid import read_swift_lid
 from .utils.smoothing import OneEuroFilter
 
-import matplotlib.pyplot as plt
 
 saved_frames = []
 
@@ -40,12 +42,13 @@ class climbcv:
 
     def __init__(
         self,
-        mode: str = "live",
+        feed: str = "live",
         model: str = "heavy",
         capture_width: int = 320,
         capture_height: int = 240,
         delegate: BaseOptions.Delegate = BaseOptions.Delegate.GPU,
         enable_exo_live: bool = True,
+        exo_live_yolo_every_n_frames: int = 4,
         enable_plotting: bool = False,
         enable_mac_lid: bool = True,
         smoothing_enabled: bool = True,
@@ -53,17 +56,23 @@ class climbcv:
         smoothing_beta: float = 0.4,
         smoothing_d_cutoff: float = 1.0,
         smoothing_visibility_threshold: float = 0.2,
+
     ):
+        """Configure the video pipeline, pose model, and optional worker processes."""
 
         if model not in self.ENUM_MODELS:
             raise ValueError(f"Invalid model '{model}'. Valid options are: {self.ENUM_MODELS}")
         
 
         self.model = model
+        self.feed = feed
         self.capture_width = capture_width
         self.capture_height = capture_height
         self.delegate = delegate
         self.enable_exo_live = enable_exo_live
+        if exo_live_yolo_every_n_frames < 1:
+            raise ValueError("exo_live_yolo_every_n_frames must be at least 1")
+        self.exo_live_yolo_every_n_frames = exo_live_yolo_every_n_frames
         self.enable_plotting = enable_plotting
         self.enable_mac_lid = enable_mac_lid
         self.smoothing_enabled = smoothing_enabled
@@ -77,8 +86,13 @@ class climbcv:
         self.plot_queue = None
         self.lid_angle_value = None
         self.lid_timestamp = None
+        self._yolo_proc: Process | None = None
+        self._yolo_input_queue: Queue | None = None
+        self._yolo_output_queue: Queue | None = None
+        self._latest_yolo_boxes: list[tuple[int, int, int, int, str, float]] = []
         self.raw_landmarks = None
         self.smoothed_landmarks = None
+        self._exo_live_frame_index = 0
         self._run_thread: Thread | None = None
         self._landmark_filter = OneEuroFilter(
             min_cutoff=smoothing_min_cutoff,
@@ -97,15 +111,195 @@ class climbcv:
             min_tracking_confidence=0.5,
         )
 
+        self.yolo_model_path = "models/hold_detection.pt"
+        self.yolo_imgsz = 256
+        self.yolo_input_width = 192
+        
         print(
             "Initialized climbcv with the configs: "
             f"\n\tmodel={self.model} "
+            f"\n\tfeed={self.feed}"
             f"\n\tcapture=({self.capture_width}x{self.capture_height})"
             f"\n\tdelegate={self.delegate}"
             f"\n\texo_live={self.enable_exo_live}"
+            f"\n\texo_live_yolo_every_n_frames={self.exo_live_yolo_every_n_frames}"
+            f"\n\tyolo_imgsz={self.yolo_imgsz}"
+            f"\n\tyolo_input_width={self.yolo_input_width}"
             f"\n\tplotting={self.enable_plotting}"
             f"\n\tmac_lid={self.enable_mac_lid}"
         )
+
+
+    def _draw_yolo_boxes(self, frame: np.ndarray) -> np.ndarray:
+        if not self._latest_yolo_boxes:
+            return frame
+
+        for x1, y1, x2, y2, label, conf in self._latest_yolo_boxes:
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 1)
+            cv2.putText(
+                frame,
+                f"{label} {conf:.2f}",
+                (x1, max(20, y1 - 8)),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                (0, 255, 0),
+                1,
+            )
+
+        return frame
+
+
+    def _initialize_runtime_workers(self) -> None:
+        """Create shared state and start optional YOLO and plotting workers."""
+        self.manager = Manager()
+        self.stop_event = self.manager.Event()
+        self.thread_lid = None
+        self.lid_angle_value = self.manager.Value('d', 0.0)
+        self.lid_timestamp = self.manager.Value('f', 0.0)
+        self._latest_yolo_boxes = []
+
+        if self.enable_exo_live:
+            self._yolo_input_queue = Queue(maxsize=1)
+            self._yolo_output_queue = Queue(maxsize=1)
+            self._yolo_proc = Process(
+                target=yolo_boxes_worker,
+                args=(
+                    self.yolo_model_path,
+                    self.yolo_imgsz,
+                    self._yolo_input_queue,
+                    self._yolo_output_queue,
+                    self.stop_event,
+                ),
+            )
+            self._yolo_proc.start()
+
+        if self.enable_plotting:
+            self.plot_queue = self.manager.Queue(maxsize=2)
+            self.plot_proc = Process(target=plotting_process, args=(self.plot_queue,))
+            self.plot_proc.start()
+
+
+    def _update_landmarks(
+        self,
+        result,
+        timestamp_ms: int,
+        on_landmarks: Callable[[np.ndarray], None] | None,
+    ) -> None:
+        """Extract world landmarks, smooth them, and notify the callback."""
+        has_pose = bool(result.pose_landmarks)
+        if not (has_pose and result.pose_world_landmarks):
+            return
+
+        try:
+            landmarks_obj = result.pose_world_landmarks[0]
+            landmarks_iter = landmarks_obj.landmark if hasattr(landmarks_obj, "landmark") else landmarks_obj
+            self.raw_landmarks = [
+                (getattr(l, "visibility", 1.0), float(l.x), float(l.y), float(l.z))
+                for l in landmarks_iter
+            ]
+
+            raw_array = np.asarray(self.raw_landmarks, dtype=np.float32)
+            if self.smoothing_enabled:
+                if self.smoothed_landmarks is not None and raw_array.shape != self.smoothed_landmarks.shape:
+                    self._landmark_filter.reset()
+                    self.smoothed_landmarks = None
+
+                if self.smoothing_visibility_threshold > 0.0 and self.smoothed_landmarks is not None:
+                    low_vis = raw_array[:, 0] < self.smoothing_visibility_threshold
+                    if np.any(low_vis):
+                        raw_array[low_vis, 1:] = self.smoothed_landmarks[low_vis, 1:]
+
+                self.smoothed_landmarks = self._landmark_filter.apply(raw_array, timestamp_ms / 1000.0)
+            else:
+                self.smoothed_landmarks = raw_array
+
+            self.average_landmarks = self.smoothed_landmarks
+
+            if on_landmarks is not None:
+                try:
+                    on_landmarks(self.smoothed_landmarks)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+
+    def _queue_plot_landmarks(self) -> None:
+        """Send the latest landmarks to the plotting queue and persist them."""
+        if self.plot_queue is None:
+            return
+
+        landmarks = self.smoothed_landmarks if self.smoothed_landmarks is not None else self.raw_landmarks
+        if landmarks is None:
+            return
+
+        if self.smoothed_landmarks is not None:
+            saved_frames.append(self.smoothed_landmarks)
+
+        try:
+            if self.plot_queue.full():
+                _ = self.plot_queue.get_nowait()
+        except Exception:
+            pass
+
+        try:
+            self.plot_queue.put_nowait(landmarks)
+        except Exception:
+            pass
+
+
+    def _queue_yolo_frame(self, frame: np.ndarray) -> None:
+        """Resize and enqueue a frame for YOLO inference when due."""
+        if self._yolo_input_queue is None:
+            return
+
+        self._exo_live_frame_index += 1
+        if self._exo_live_frame_index % self.exo_live_yolo_every_n_frames != 0:
+            return
+
+        try:
+            if self._yolo_input_queue.full():
+                _ = self._yolo_input_queue.get_nowait()
+        except Empty:
+            pass
+        except Exception:
+            pass
+
+        try:
+            height, width = frame.shape[:2]
+            resized_height = max(1, int(height * (self.yolo_input_width / width)))
+            small_frame = cv2.resize(
+                frame,
+                (self.yolo_input_width, resized_height),
+                interpolation=cv2.INTER_LINEAR,
+            )
+            scale_x = width / float(self.yolo_input_width)
+            scale_y = height / float(resized_height)
+            self._yolo_input_queue.put_nowait((small_frame, scale_x, scale_y))
+        except Full:
+            pass
+        except Exception:
+            pass
+
+
+    def _drain_yolo_boxes(self) -> None:
+        """Keep only the newest YOLO detections from the output queue."""
+        if self._yolo_output_queue is None:
+            return
+
+        try:
+            while True:
+                self._latest_yolo_boxes = self._yolo_output_queue.get_nowait()
+        except Empty:
+            pass
+        except Exception:
+            pass
+
+
+    def _render_exo_live(self, frame: np.ndarray, result) -> None:
+        """Draw YOLO boxes and render the live exo view."""
+        frame = self._draw_yolo_boxes(frame)
+        exo_live(cv2, frame, result, self.lid_angle_value, self.lid_timestamp)
 
 
     def _cleanup(self) -> None:
@@ -142,6 +336,19 @@ class climbcv:
                 plot_proc.terminate()
             plot_proc.join(timeout=1)
 
+        yolo_proc = getattr(self, "_yolo_proc", None)
+        yolo_input_queue = getattr(self, "_yolo_input_queue", None)
+        if yolo_proc is not None and yolo_proc.is_alive():
+            try:
+                if yolo_input_queue is not None:
+                    yolo_input_queue.put_nowait(None)
+            except Exception:
+                pass
+            yolo_proc.join(timeout=1)
+            if yolo_proc.is_alive():
+                yolo_proc.terminate()
+                yolo_proc.join(timeout=1)
+
         manager = getattr(self, "manager", None)
         if manager is not None:
             manager.shutdown()
@@ -162,22 +369,28 @@ class climbcv:
 
 
     def __open_camera(self) -> cv2.VideoCapture | None:
-        for index in np.arange(0, 4):
-            cap = cv2.VideoCapture(index, cv2.CAP_AVFOUNDATION)
-            cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.CAPTURE_WIDTH)
-            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.CAPTURE_HEIGHT)
-            
-            if cap.isOpened():
-                print(f"Using camera index {index} (AVFoundation)")
-                return cap
-            cap.release()
+        if self.feed == "live":
+            for index in np.arange(0, 4):
+                cap = cv2.VideoCapture(index, cv2.CAP_AVFOUNDATION)
+                cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.CAPTURE_WIDTH)
+                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.CAPTURE_HEIGHT)
 
-        for index in np.arange(0, 4):
-            cap = cv2.VideoCapture(index)
+                if cap.isOpened():
+                    print(f"Using camera index {index} (AVFoundation)")
+                    return cap
+
+            for index in np.arange(0, 4):
+                cap = cv2.VideoCapture(index)
+                if cap.isOpened():
+                    print(f"Using camera index {index} (default backend)")
+                    return cap
+        else:
+            cap = cv2.VideoCapture(self.feed)
             if cap.isOpened():
-                print(f"Using camera index {index} (default backend)")
+                print(f"Using video file {self.feed}")
                 return cap
-            cap.release()
+            
+        cap.release()
 
         return None
 
@@ -189,6 +402,7 @@ class climbcv:
         blocking: bool = True,
         on_landmarks: Callable[[np.ndarray], None] | None = None,
     ) -> None:
+        """Start capture and processing, optionally on a background thread."""
         if not blocking:
             if self._run_thread is not None and self._run_thread.is_alive():
                 return
@@ -207,19 +421,8 @@ class climbcv:
 
         if self.cap is None:
             raise RuntimeError("No camera could be opened.")
-        
-        # Multiprocessing manager for angle and plotting queue
-        self.manager = Manager()
-        self.stop_event = self.manager.Event()
-        self.thread_lid = None
-        self.lid_angle_value = self.manager.Value('d', 0.0)
-        self.lid_timestamp = self.manager.Value('f', 0.0)
 
-        # Plotting process and queue (not running on the main thread to avoid blocking)
-        if self.enable_plotting:
-            self.plot_queue = self.manager.Queue(maxsize=2)
-            self.plot_proc = Process(target=plotting_process, args=(self.plot_queue,))
-            self.plot_proc.start()
+        self._initialize_runtime_workers()
 
         with PoseLandmarker.create_from_options(self.options) as landmarker:
             while self.cap.isOpened():
@@ -236,84 +439,15 @@ class climbcv:
                 timestamp_ms = int(time.monotonic() * 1000)
                 result = landmarker.detect_for_video(mp_image, timestamp_ms)
 
-                has_pose = bool(result.pose_landmarks)
-
-                # extract raw landmark data for external access and optional plotting
-                if has_pose and result.pose_world_landmarks:
-                    try:
-                        landmarks_obj = result.pose_world_landmarks[0]
-                        landmarks_iter = landmarks_obj.landmark if hasattr(landmarks_obj, "landmark") else landmarks_obj
-                        self.raw_landmarks = [
-                            (getattr(l, "visibility", 1.0), float(l.x), float(l.y), float(l.z))
-                            for l in landmarks_iter
-                        ]
-
-                        raw_array = np.asarray(self.raw_landmarks, dtype=np.float32)
-                        if self.smoothing_enabled:
-                            if (
-                                self.smoothed_landmarks is not None
-                                and raw_array.shape != self.smoothed_landmarks.shape
-                            ):
-                                self._landmark_filter.reset()
-                                self.smoothed_landmarks = None
-
-                            if (
-                                self.smoothing_visibility_threshold > 0.0
-                                and self.smoothed_landmarks is not None
-                            ):
-                                # Hold low-visibility points to reduce jitter.
-                                low_vis = raw_array[:, 0] < self.smoothing_visibility_threshold
-                                if np.any(low_vis):
-                                    raw_array[low_vis, 1:] = self.smoothed_landmarks[low_vis, 1:]
-
-                            self.smoothed_landmarks = self._landmark_filter.apply(
-                                raw_array, timestamp_ms / 1000.0
-                            )
-                        else:
-                            self.smoothed_landmarks = raw_array
-
-                        self.average_landmarks = self.smoothed_landmarks
-
-                        if on_landmarks is not None:
-                            try:
-                                on_landmarks(self.smoothed_landmarks)
-                            except Exception:
-                                pass
-                    except Exception:
-                        pass
+                self._update_landmarks(result, timestamp_ms, on_landmarks)
 
                 if self.enable_plotting:
+                    self._queue_plot_landmarks()
 
-                    if self.plot_queue is None: 
-                        continue
-
-                    if self.smoothed_landmarks is not None:
-                        saved_frames.append(self.smoothed_landmarks)
-                        try:
-                            if self.plot_queue.full():
-                                _ = self.plot_queue.get_nowait()
-                        except Exception:
-                            pass
-                        try:
-                            self.plot_queue.put_nowait(self.smoothed_landmarks)
-                        except Exception:
-                            pass
-                        
-                    elif self.raw_landmarks is not None:
-                        try:
-                            if self.plot_queue.full():
-                                _ = self.plot_queue.get_nowait()
-                        except Exception:
-                            pass
-                        try:
-                            self.plot_queue.put_nowait(self.raw_landmarks)
-                        except Exception:
-                            pass
-
-
-                # exo_live - draw pose landmarks and display the frame
                 if self.enable_exo_live:
-                    exo_live(cv2, frame, result, self.lid_angle_value, self.lid_timestamp)
+                    self._queue_yolo_frame(frame)
+                    self._drain_yolo_boxes()
+                    self._render_exo_live(frame, result)
 
 
                 # spawn a separate worker to read the mac camera angle if the previous worker is not alive
@@ -328,6 +462,7 @@ class climbcv:
 
 
     def stop(self, timeout: float = 2.0) -> None:
+        """Request shutdown and wait for the background thread to finish."""
         if self.stop_event is not None:
             self.stop_event.set()
 
@@ -338,6 +473,7 @@ class climbcv:
             self._cleanup()
 
     def replay(self, filename: str) -> None:
+        """Replay a saved landmark file as an animated 3D plot."""
 
         print(f"Replaying landmarks from file: {filename}")
 
@@ -361,3 +497,4 @@ class climbcv:
             plot_world_landmarks_points(ax, frame)
             fig.canvas.draw_idle()
             plt.pause(0.01)
+

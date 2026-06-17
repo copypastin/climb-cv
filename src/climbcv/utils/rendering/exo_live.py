@@ -4,6 +4,7 @@ from mediapipe.tasks.python.vision.pose_landmarker import PoseLandmarksConnectio
 from mediapipe.tasks.python.vision import drawing_utils as mp_drawing
 from .. import config
 
+
 def exo_live(cv, frame, result, lid_angle, lid_timestamp) -> None:
 
     curr_time, latency, fps = None, None, None
@@ -13,9 +14,11 @@ def exo_live(cv, frame, result, lid_angle, lid_timestamp) -> None:
             frame,
             result.pose_landmarks[0],
             PoseLandmarksConnections.POSE_LANDMARKS,
-                mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=1, circle_radius=1),
+                mp_drawing.DrawingSpec(color=(255, 255, 255), thickness=1, circle_radius=1),
                 mp_drawing.DrawingSpec(color=(0, 0, 255), thickness=1)
         )
+
+
 
     curr_time = time.time()
     fps: float = (1 / (curr_time - config.prev_time) if config.prev_time else 0)
@@ -29,5 +32,6 @@ def exo_live(cv, frame, result, lid_angle, lid_timestamp) -> None:
         cv.putText(frame, f"Mac Camera Angle: {lid_angle.value} ({latency:.2f}ms ago)", (10, 60), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
     else:
         cv.putText(frame, "Mac Camera Angle: n/a", (10, 60), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+
     cv.imshow("MediaPipe Pose Landmarker", frame)
 

@@ -17,7 +17,6 @@ def main():
 def on_landmarks(landmarks):
     global latest_landmarks
     latest_landmarks = landmarks
-    print("Received landmarks:", landmarks)
 
 if __name__ == "__main__":
     main()
