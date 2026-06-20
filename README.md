@@ -33,9 +33,18 @@ stack is compartmentalized into 3 distinct modules:
 
 
 ## requirements
-- python 3.8+
+- python 3.10+
 - macbook M2 or newer (required for lid angle sensor)
     - swift compiler
+
+## installation
+install the package (and its dependencies) in editable mode from the repo root:
+
+```bash
+pip install -e .
+```
+
+this exposes the `climbcv` package so you can `from climbcv.climbcv import climbcv` from anywhere. run the samples from the repo root so the bundled `models/` are found, e.g. `python src/sample_1.py`.
 
 ## additional tech & references
 - [Crux Lab Reconstruct](https://github.com/cruxbetalabs/reconstruct)
