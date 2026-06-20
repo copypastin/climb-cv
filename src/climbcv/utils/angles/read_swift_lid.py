@@ -20,7 +20,7 @@ def read_swift_lid(lid_angle_value, lid_timestamp, stop_event=None, poll_interva
         if not build_dir.exists():
             build_dir.mkdir(parents=True)
 
-        print("Compiling LidAngle from switft to binary")
+        print("Compiling LidAngle from swift to binary")
         command = f"swiftc {path / 'lid_angle.swift'} {path / 'hardware_compat.swift'} -o {build_path}"
         subprocess.run(command, shell=True, check=True)
 

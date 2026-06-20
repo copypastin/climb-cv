@@ -20,11 +20,11 @@ the main concept of this project is to create a package of computer vision tools
 stack is compartmentalized into 3 distinct modules:
 1. **Video streaming and processing**
 >  **OpenCV** for image processing and analysis
-1. **Pose estimation and analysis**
->  [Media Pose](https://github.com/google/mediapipe) for pose estimation
+2. **Pose estimation and analysis**
+>  [MediaPipe](https://github.com/google/mediapipe) for pose estimation
 > Data points are extracted and filtered to remove noise and improve accuracy
 > Results are rendered in 3d space using **matplotlib**    
-2. **Climb hold prediction and visualization**
+3. **Climb hold prediction and visualization**
 >  Implements [YOLO model](https://docs.ultralytics.com/models/yolo26#overview) for object detection
 > 
 
