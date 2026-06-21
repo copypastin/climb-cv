@@ -25,8 +25,7 @@ stack is compartmentalized into 3 distinct modules:
 > Data points are extracted and filtered to remove noise and improve accuracy
 > Results are rendered in 3d space using **matplotlib**    
 3. **Climb hold prediction and visualization**
->  Implements [YOLO model](https://docs.ultralytics.com/models/yolo26#overview) for object detection
-> 
+>  [YOLO 26 model](https://docs.ultralytics.com/models/yolo26#overview) for object detection; fork to existing dataset here [Ultralytics](https://platform.ultralytics.com/aaron/datasets/holds5)
 
 
 <img width="800" height="354" alt="climb2" src="assets/climb1.gif" />
@@ -45,6 +44,12 @@ pip install -e .
 ```
 
 this exposes the `climbcv` package so you can `from climbcv.climbcv import climbcv` from anywhere. run the samples from the repo root so the bundled `models/` are found, e.g. `python src/sample_1.py`.
+
+## ways to contribute / future goals
+- implementations of physics calculations (like center of gravity, velocity) using scipy
+- visualization of climbing movements in a relative space rather than absolute space
+- improve the accuracy of pose estimation and analysis
+- expand the dataset of climb holds for better object detection
 
 ## additional tech & references
 - [Crux Lab Reconstruct](https://github.com/cruxbetalabs/reconstruct)
