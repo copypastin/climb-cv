@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Callable
+import sys
 import time
 import cv2
 import numpy as np
@@ -75,6 +76,12 @@ class climbcv:
         self.exo_live_yolo_every_n_frames = exo_live_yolo_every_n_frames
         self.enable_plotting = enable_plotting
         self.enable_mac_lid = enable_mac_lid
+        # The lid angle sensor relies on the Swift compiler and Apple hardware,
+        # so it is only available on macOS. On other platforms it would spawn a
+        # failing `swiftc` subprocess every frame, so disable it up front.
+        if self.enable_mac_lid and sys.platform != "darwin":
+            print("enable_mac_lid is only supported on macOS; disabling lid angle sensor.")
+            self.enable_mac_lid = False
         self.smoothing_enabled = smoothing_enabled
         self.smoothing_visibility_threshold = smoothing_visibility_threshold
 
