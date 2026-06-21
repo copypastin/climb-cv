@@ -15,6 +15,16 @@ def read_swift_lid(lid_angle_value, lid_timestamp, stop_event=None, poll_interva
     build_dir: Path = repo_root / "build"
     build_path: Path = build_dir / "LidAngle_Compiled"
     path: Path = repo_root / "src" / "climbcv" / "utils" / "angles"
+    command: str = None
+
+    if not build_path.exists() and not OVERRIDE_COMPILED:
+
+        if not build_dir.exists():
+            build_dir.mkdir(parents=True)
+
+        print("Compiling LidAngle from swift to binary")
+        command = f"swiftc {path / 'lid_angle.swift'} {path / 'hardware_compat.swift'} -o {build_path}"
+        subprocess.run(command, shell=True, check=True)
 
     # Compile the Swift sources to a binary once, up front.
     if OVERRIDE_COMPILED or not build_path.exists():
