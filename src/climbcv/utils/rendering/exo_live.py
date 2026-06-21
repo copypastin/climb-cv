@@ -28,8 +28,8 @@ def exo_live(cv, frame, result, lid_angle, lid_timestamp) -> None:
 
 
     if lid_angle.value is not None and lid_timestamp.value is not None:
-        latency = curr_time - lid_timestamp.value
-        cv.putText(frame, f"Mac Camera Angle: {lid_angle.value} ({latency:.2f}ms ago)", (10, 60), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+        latency_ms = (curr_time - lid_timestamp.value) * 1000.0
+        cv.putText(frame, f"Mac Camera Angle: {lid_angle.value} ({latency_ms:.2f}ms ago)", (10, 60), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
     else:
         cv.putText(frame, "Mac Camera Angle: n/a", (10, 60), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
 
