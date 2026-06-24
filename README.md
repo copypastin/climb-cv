@@ -5,7 +5,7 @@
 
 
 
-<img width="800" height="400" alt="climb-cv" src="assets/tommy-climb.gif" />
+<img width="800" height="400" alt="climb-cv" src="assets/header2.gif" />
 
 > read the [journal](./JOURNAL.md) for ongoing updates and development!
 
