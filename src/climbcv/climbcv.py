@@ -1,4 +1,5 @@
 from pathlib import Path
+from importlib.resources import files
 from typing import Callable
 import sys
 import time
@@ -24,21 +25,33 @@ from .utils.smoothing import OneEuroFilter
 
 saved_frames = []
 
-class climbcv:
-        
-    MODEL_DIR: Path = Path("./models")
-    MODEL_PATH: Path = MODEL_DIR / "pose_landmarker_heavy.task"
-    MODELS_PATHS: dict[str, Path] = {
-        "heavy": MODEL_DIR / "pose_landmarker_heavy.task",
-        "full": MODEL_DIR / "pose_landmarker_full.task",
-        "regular": MODEL_DIR / "pose_landmarker.task"
+
+def _get_packaged_model_path(model_variant: str) -> str:
+    model_filenames = {
+        "heavy": "pose_landmarker_heavy.task",
+        "full": "pose_landmarker_full.task",
+        "regular": "pose_landmarker.task",
+        "lite": "pose_landmarker.task",
     }
 
-    # configurables
-    CURRENT_MODEL: Path = MODELS_PATHS["heavy"]
+    filename = model_filenames.get(model_variant)
+    if filename is None:
+        raise ValueError(f"Invalid model variant '{model_variant}'. Valid options are: {sorted(model_filenames)}")
+
+    model_path = files("climbcv").joinpath("models", filename)
+    if not model_path.is_file():
+        raise FileNotFoundError(
+            f"Model file not found in package: {model_path}. "
+            "Reinstall the package so the bundled model assets are available."
+        )
+
+    return str(model_path)
+
+class climbcv:
+    MODEL_VARIANTS = {"heavy", "full", "regular", "lite"}
 
     CAPTURE_WIDTH, CAPTURE_HEIGHT = 320, 240
-    ENUM_MODELS = {"heavy", "full", "regular"}        
+    ENUM_MODELS = MODEL_VARIANTS        
 
 
     def __init__(
@@ -107,10 +120,17 @@ class climbcv:
             d_cutoff=smoothing_d_cutoff,
         )
 
+        model_asset_path = _get_packaged_model_path(self.model)
+        if not Path(model_asset_path).exists():
+            raise FileNotFoundError(
+                f"Model file not found in package: {model_asset_path}. "
+                "Reinstall the package so the bundled model assets are available."
+            )
+
         self.options: PoseLandmarkerOptions = PoseLandmarkerOptions(
             base_options=BaseOptions(
-                model_asset_path=str(self.CURRENT_MODEL),
-                delegate= self.delegate,
+                model_asset_path=model_asset_path,
+                delegate=self.delegate,
             ),
             running_mode=VisionTaskRunningMode.VIDEO,
             min_pose_detection_confidence=0.5,

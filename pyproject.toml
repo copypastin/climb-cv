@@ -31,3 +31,9 @@ Repository = "https://github.com/copypastin/climb-cv"
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["climbcv*"]
+
+[tool.setuptools.package-data]
+climbcv = [
+  "models/*.task",
+  "models/*.pt",
+]
