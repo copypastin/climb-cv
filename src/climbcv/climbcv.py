@@ -26,6 +26,16 @@ from .utils.smoothing import OneEuroFilter
 saved_frames = []
 
 
+def _get_packaged_asset_path(*path_parts: str) -> str:
+    asset_path = files("climbcv").joinpath(*path_parts)
+    if not asset_path.exists():
+        raise FileNotFoundError(
+            f"Packaged asset not found: {asset_path}. Reinstall the package so the bundled files are available."
+        )
+
+    return str(asset_path)
+
+
 def _get_packaged_model_path(model_variant: str) -> str:
     model_filenames = {
         "heavy": "pose_landmarker_heavy.task",
@@ -38,14 +48,7 @@ def _get_packaged_model_path(model_variant: str) -> str:
     if filename is None:
         raise ValueError(f"Invalid model variant '{model_variant}'. Valid options are: {sorted(model_filenames)}")
 
-    model_path = files("climbcv").joinpath("models", filename)
-    if not model_path.is_file():
-        raise FileNotFoundError(
-            f"Model file not found in package: {model_path}. "
-            "Reinstall the package so the bundled model assets are available."
-        )
-
-    return str(model_path)
+    return _get_packaged_asset_path("models", filename)
 
 class climbcv:
     MODEL_VARIANTS = {"heavy", "full", "regular", "lite"}
@@ -70,6 +73,7 @@ class climbcv:
         smoothing_beta: float = 0.4,
         smoothing_d_cutoff: float = 1.0,
         smoothing_visibility_threshold: float = 0.2,
+        output_dir: str | Path | None = None,
 
     ):
         """Configure the video pipeline, pose model, and optional worker processes."""
@@ -89,6 +93,7 @@ class climbcv:
         self.exo_live_yolo_every_n_frames = exo_live_yolo_every_n_frames
         self.enable_plotting = enable_plotting
         self.enable_mac_lid = enable_mac_lid
+        self.output_dir = Path(output_dir) if output_dir is not None else Path.cwd() / "data"
         # The lid angle sensor relies on the Swift compiler and Apple hardware,
         # so it is only available on macOS. On other platforms it would spawn a
         # failing `swiftc` subprocess every frame, so disable it up front.
@@ -138,7 +143,7 @@ class climbcv:
             min_tracking_confidence=0.5,
         )
 
-        self.yolo_model_path = "models/hold_detection.pt"
+        self.yolo_model_path = _get_packaged_asset_path("models", "hold_detection.pt")
         self.yolo_imgsz = 256
         self.yolo_input_width = 192
         
@@ -380,7 +385,7 @@ class climbcv:
         if manager is not None:
             manager.shutdown()
 
-        data_path = Path(__file__).resolve().parents[2] / "data"
+        data_path = self.output_dir
         data_path.mkdir(parents=True, exist_ok=True)
         filename = data_path / f"landmarks_{int(time.time())}.npy"
 

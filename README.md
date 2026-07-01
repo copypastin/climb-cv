@@ -37,13 +37,19 @@ stack is compartmentalized into 3 distinct modules:
     - swift compiler
 
 ## installation
-install the package (and its dependencies) in editable mode from the repo root:
+install the package (and its dependencies) from the repo root or directly from GitHub:
 
 ```bash
 pip install -e .
+# or
+pip install git+https://github.com/copypastin/climb-cv
 ```
 
-this exposes the `climbcv` package so you can `from climbcv.climbcv import climbcv` from anywhere. run the samples from the repo root so the bundled `models/` are found, e.g. `python src/sample_1.py`.
+this exposes the `climbcv` package so you can `from climbcv.climbcv import climbcv` from anywhere. the bundled pose and hold-detection models are included with the package, so they work after a normal pip install.
+
+landmark exports are saved to `./data` by default when you stop a run. pass `output_dir=...` if you want them written somewhere else.
+
+run the samples from the repo root if you want the local assets and demo scripts, e.g. `python src/sample_1.py`.
 
 ## ways to contribute / future goals
 - implementations of physics calculations (like center of gravity, velocity) using scipy
