@@ -33,8 +33,10 @@ stack is compartmentalized into 3 distinct modules:
 
 ## requirements
 - python 3.10+
-- macbook M2 or newer (required for lid angle sensor)
-    - swift compiler
+- a webcam
+- **optional (macOS only):** macbook M2 or newer + swift compiler, for the lid angle sensor
+
+climb-cv runs on **macOS, Windows, and Linux**. The core pipeline (video, pose estimation, hold detection) is cross-platform. The only mac-only feature is the lid angle sensor, which reads the laptop hinge angle via a Swift helper; it is automatically disabled on Windows and Linux.
 
 ## installation
 install the package (and its dependencies) from the repo root or directly from GitHub:
@@ -50,6 +52,31 @@ this exposes the `climbcv` package so you can `from climbcv.climbcv import climb
 landmark exports are saved to `./data` by default when you stop a run. pass `output_dir=...` if you want them written somewhere else.
 
 run the samples from the repo root if you want the local assets and demo scripts, e.g. `python src/sample_1.py`.
+
+### windows
+
+climb-cv works on Windows out of the box. A few platform notes:
+
+- the correct camera backend (DirectShow / Media Foundation) is selected automatically. no configuration needed.
+- MediaPipe's pip build does not ship a GPU delegate on Windows, so pose estimation automatically falls back to the CPU delegate. everything still runs; it just uses the CPU.
+- the mac lid angle sensor is disabled automatically. no Swift compiler is required.
+- Windows uses the `spawn` process-start method, so any script that creates a `climbcv` instance must guard its entry point:
+
+  ```python
+  if __name__ == "__main__":
+      main()
+  ```
+
+  the bundled `src/sample_1.py` and `src/sample_2.py` already do this.
+
+from PowerShell:
+
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -e .
+python src\sample_1.py
+```
 
 ## ways to contribute / future goals
 - implementations of physics calculations (like center of gravity, velocity) using scipy
