@@ -125,23 +125,14 @@ class climbcv:
             d_cutoff=smoothing_d_cutoff,
         )
 
-        model_asset_path = _get_packaged_model_path(self.model)
-        if not Path(model_asset_path).exists():
+        self._model_asset_path = _get_packaged_model_path(self.model)
+        if not Path(self._model_asset_path).exists():
             raise FileNotFoundError(
-                f"Model file not found in package: {model_asset_path}. "
+                f"Model file not found in package: {self._model_asset_path}. "
                 "Reinstall the package so the bundled model assets are available."
             )
 
-        self.options: PoseLandmarkerOptions = PoseLandmarkerOptions(
-            base_options=BaseOptions(
-                model_asset_path=model_asset_path,
-                delegate=self.delegate,
-            ),
-            running_mode=VisionTaskRunningMode.VIDEO,
-            min_pose_detection_confidence=0.5,
-            min_pose_presence_confidence=0.5,
-            min_tracking_confidence=0.5,
-        )
+        self.options: PoseLandmarkerOptions = self._build_pose_options(self.delegate)
 
         self.yolo_model_path = _get_packaged_asset_path("models", "hold_detection.pt")
         self.yolo_imgsz = 256
@@ -160,6 +151,39 @@ class climbcv:
             f"\n\tplotting={self.enable_plotting}"
             f"\n\tmac_lid={self.enable_mac_lid}"
         )
+
+
+    def _build_pose_options(self, delegate: BaseOptions.Delegate) -> PoseLandmarkerOptions:
+        """Build pose landmarker options for the given inference delegate."""
+        return PoseLandmarkerOptions(
+            base_options=BaseOptions(
+                model_asset_path=self._model_asset_path,
+                delegate=delegate,
+            ),
+            running_mode=VisionTaskRunningMode.VIDEO,
+            min_pose_detection_confidence=0.5,
+            min_pose_presence_confidence=0.5,
+            min_tracking_confidence=0.5,
+        )
+
+
+    def _create_pose_landmarker(self) -> PoseLandmarker:
+        """Create the pose landmarker, falling back from GPU to CPU if the GPU
+        delegate is unavailable. MediaPipe's pip build ships a GPU delegate on
+        macOS (Metal) but not on Windows, where requesting it raises at
+        creation time; the CPU delegate works everywhere."""
+        try:
+            return PoseLandmarker.create_from_options(self.options)
+        except Exception as exc:
+            if self.delegate == BaseOptions.Delegate.CPU:
+                raise
+            print(
+                f"GPU delegate unavailable for the pose landmarker ({exc}); "
+                "falling back to the CPU delegate."
+            )
+            self.delegate = BaseOptions.Delegate.CPU
+            self.options = self._build_pose_options(BaseOptions.Delegate.CPU)
+            return PoseLandmarker.create_from_options(self.options)
 
 
     def _draw_yolo_boxes(self, frame: np.ndarray) -> np.ndarray:
@@ -400,31 +424,48 @@ class climbcv:
 
 
 
+    def _preferred_camera_backends(self) -> list[tuple[int, str]]:
+        """Return the OpenCV capture backends to try, best-first, for this OS.
+
+        The native camera backend differs per platform: AVFoundation on macOS,
+        DirectShow / Media Foundation on Windows, V4L2 on Linux. ``cv2.CAP_ANY``
+        (the default backend) is always tried last as a fallback.
+        """
+        if sys.platform == "darwin":
+            return [(cv2.CAP_AVFOUNDATION, "AVFoundation"), (cv2.CAP_ANY, "default")]
+        if sys.platform == "win32":
+            return [
+                (cv2.CAP_DSHOW, "DirectShow"),
+                (cv2.CAP_MSMF, "MediaFoundation"),
+                (cv2.CAP_ANY, "default"),
+            ]
+        return [(cv2.CAP_V4L2, "V4L2"), (cv2.CAP_ANY, "default")]
+
+
     def __open_camera(self) -> cv2.VideoCapture | None:
         if self.feed == "live":
-            for index in np.arange(0, 4):
-                cap = cv2.VideoCapture(index, cv2.CAP_AVFOUNDATION)
-                cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.CAPTURE_WIDTH)
-                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.CAPTURE_HEIGHT)
+            for backend, backend_name in self._preferred_camera_backends():
+                for index in range(0, 4):
+                    cap = cv2.VideoCapture(index, backend)
+                    cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.CAPTURE_WIDTH)
+                    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.CAPTURE_HEIGHT)
 
-                if cap.isOpened():
-                    print(f"Using camera index {index} (AVFoundation)")
-                    return cap
+                    if cap.isOpened():
+                        print(f"Using camera index {index} ({backend_name})")
+                        return cap
 
-            for index in np.arange(0, 4):
-                cap = cv2.VideoCapture(index)
-                if cap.isOpened():
-                    print(f"Using camera index {index} (default backend)")
-                    return cap
+                    cap.release()
+
+            return None
         else:
             cap = cv2.VideoCapture(self.feed)
             if cap.isOpened():
                 print(f"Using video file {self.feed}")
                 return cap
-            
-        cap.release()
 
-        return None
+            cap.release()
+
+            return None
 
     
 
@@ -456,7 +497,7 @@ class climbcv:
 
         self._initialize_runtime_workers()
 
-        with PoseLandmarker.create_from_options(self.options) as landmarker:
+        with self._create_pose_landmarker() as landmarker:
             while self.cap.isOpened():
                 if self.stop_event is not None and self.stop_event.is_set():
                     break
